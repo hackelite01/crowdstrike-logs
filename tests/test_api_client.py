@@ -53,8 +53,8 @@ def test_raises_after_max_retries():
 
 def test_handles_429_with_retry_after_header():
     client, _, rl = _make_client()
-    future_epoch = int(time.time()) + 5
-    throttled = _make_response(429, {}, {"X-RateLimit-RetryAfter": str(future_epoch)})
+    future_epoch_ms = (int(time.time()) + 5) * 1000  # Falcon returns milliseconds since epoch
+    throttled = _make_response(429, {}, {"X-RateLimit-RetryAfter": str(future_epoch_ms)})
     ok = _make_response(200, {"resources": []})
     with patch("collector.api_client.requests.request", side_effect=[throttled, ok]):
         with patch("collector.api_client.time.sleep") as mock_sleep:

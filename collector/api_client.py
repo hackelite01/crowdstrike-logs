@@ -77,10 +77,11 @@ class ApiClient:
                 continue  # re-enter loop with fresh token
 
             if resp.status_code == 429:
-                retry_after = int(
-                    resp.headers.get("X-RateLimit-RetryAfter", int(time.time()) + 60)
+                # X-RateLimit-RetryAfter is milliseconds since epoch per Falcon API spec
+                retry_after_ms = int(
+                    resp.headers.get("X-RateLimit-RetryAfter", (int(time.time()) + 60) * 1000)
                 )
-                self._rl.set_retry_after(float(retry_after))
+                self._rl.set_retry_after(retry_after_ms / 1000.0)
                 self._rl.wait_if_limited()
                 continue
 
