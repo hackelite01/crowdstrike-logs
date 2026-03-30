@@ -1,15 +1,17 @@
 import logging
 from queue import Queue
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from collector.base import BaseCollector, enrich_event, should_skip_event
 
 logger = logging.getLogger("collector.audit_events")
 
-_QUERY_PATH = "/audit-events/queries/events/v1"
-_ENTITY_PATH = "/audit-events/entities/events/v1"
+# Installation-token audit events — tracks creation/deletion/modification of
+# Falcon sensor installation tokens. Uses offset-based pagination (not cursor).
+_QUERY_PATH = "/installation-tokens/queries/audit-events/v1"
+_ENTITY_PATH = "/installation-tokens/entities/audit-events/v1"
 _EVENT_ID_FIELD = "id"
-_TS_FIELD = "created_timestamp"
+_TS_FIELD = "timestamp"  # field name in entity response
 
 
 class AuditEventsCollector(BaseCollector):
@@ -35,16 +37,15 @@ class AuditEventsCollector(BaseCollector):
         last_ts = state["last_timestamp"]
         last_id = state["last_id"]
         new_last_ts, new_last_id = last_ts, last_id
-        after: Optional[str] = None
+        offset = 0
 
         while True:
             params: Dict[str, Any] = {
-                "filter": f"created_timestamp:>='{last_ts}'",
-                "sort": "created_timestamp.asc",
+                "filter": f"timestamp:>='{last_ts}'",
+                "sort": "timestamp.asc",
                 "limit": self._batch_size,
+                "offset": offset,
             }
-            if after:
-                params["after"] = after
 
             query_resp = self._api.get(_QUERY_PATH, params=params)
             ids = query_resp.get("resources") or []
@@ -63,8 +64,10 @@ class AuditEventsCollector(BaseCollector):
                 if self._checkpoint_per_page:
                     self._save_state(new_last_ts, new_last_id)
 
-            after = ((query_resp.get("meta") or {}).get("pagination") or {}).get("after")
-            if not after:
+            pagination = (query_resp.get("meta") or {}).get("pagination") or {}
+            total = pagination.get("total", 0)
+            offset += len(ids)
+            if not ids or offset >= total:
                 break
 
         self._save_state(new_last_ts, new_last_id)
