@@ -1,0 +1,64 @@
+falcon:
+  client_id: "${FALCON_CLIENT_ID}"
+  client_secret: "${FALCON_CLIENT_SECRET}"
+  base_url: "https://api.us-2.crowdstrike.com"
+  token_refresh_buffer_seconds: 300
+
+collection:
+  poll_interval_seconds: 30
+  tag: "my-tenant"
+  checkpoint_per_page: false
+  sources:
+    alerts:
+      enabled: true
+      poll_interval_seconds: 30
+      batch_size: 100
+    audit_events:
+      enabled: true
+      poll_interval_seconds: 60
+      batch_size: 200
+    hosts:
+      enabled: false
+      poll_interval_seconds: 300
+      batch_size: 500
+
+queue:
+  maxsize: 10000
+  full_warn_interval_seconds: 10
+
+outputs:
+  json_file:
+    enabled: true
+    directory: "./logs"
+    rotation: hourly
+    filename_prefix: "falcon"
+    max_size_mb: 256
+    min_free_disk_mb: 500
+
+  syslog_tcp:
+    enabled: false
+    host: "10.0.1.50"
+    port: 514
+    facility: 16
+    app_name: "falcon-collector"
+    tls:
+      enabled: false
+      ca_cert: "/etc/ssl/certs/ca.pem"
+      verify: true
+
+  relp:
+    enabled: false
+    host: "10.0.1.50"
+    port: 2514
+
+  http_post:
+    enabled: false
+    url: "https://10.0.1.50:8080/ingest"
+    headers:
+      X-Api-Key: "${HTTP_INGEST_KEY}"
+    batch_size: 50
+    timeout_seconds: 10
+
+metrics:
+  enabled: true
+  log_interval_seconds: 60

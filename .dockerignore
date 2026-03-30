@@ -1,0 +1,11 @@
+config.yaml
+.env
+state.json
+logs/
+*.pyc
+__pycache__/
+.venv/
+venv/
+tests/
+.git/
+reload.trigger
