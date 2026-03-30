@@ -158,7 +158,7 @@ def main() -> None:
                 try:
                     new_cfg = load_config(CONFIG_PATH)
                     cfg = new_cfg
-                    logger.info("Config reloaded")
+                    logger.info("Config reloaded — new settings apply on next collector restart")
                 except Exception as exc:
                     logger.error("Config reload failed: %s", exc)
                 finally:
@@ -170,8 +170,10 @@ def main() -> None:
                     name = collector.name
                     delay = restart_delays.get(name, RESTART_BACKOFF_BASE)
                     logger.critical("Collector %s died — restarting in %ds", name, delay)
-                    time.sleep(delay)
+                    shutdown.wait(delay)
                     restart_delays[name] = min(delay * 2, RESTART_BACKOFF_MAX)
+                    if shutdown.is_set():
+                        break
                     last_alive[name] = 0.0
                     # Rebuild and restart the same collector type
                     new_collectors = build_collectors(cfg, api_client, state_manager, queue)
@@ -192,6 +194,9 @@ def main() -> None:
         logger.info("Shutting down — stopping collectors")
         for c in collectors:
             c.stop()
+        for c in collectors:
+            c.join(timeout=60)   # wait for in-flight poll to complete
+        queue.join()             # drain remaining events before stopping dispatcher
         dispatcher.stop()
         dispatcher.close_handlers()
         auth.revoke()
