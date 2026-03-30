@@ -2,6 +2,7 @@ import json
 import logging
 import shutil
 import threading
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, IO, Optional
@@ -31,7 +32,7 @@ class JsonFileOutput(OutputHandler):
             return f"{source}_{now.strftime('%Y-%m-%d_%H')}"
         return f"{source}_{now.strftime('%Y-%m-%d')}"
 
-    def _get_handle(self, source: str, window: str) -> Optional[IO[str]]:
+    def _get_handle(self, source: str, window: str) -> IO[str]:
         key = f"{source}_{window}"
         if key not in self._handles:
             filename = self._dir / f"{self._prefix}_{window}.json"
@@ -46,7 +47,6 @@ class JsonFileOutput(OutputHandler):
         if size >= self._max_size_bytes:
             handle.close()
             del self._handles[key]
-            import time
             filename = self._dir / f"{self._prefix}_{window}_{int(time.time())}.json"
             self._handles[key] = open(filename, "a", encoding="utf-8")
         return self._handles[key]
@@ -66,11 +66,11 @@ class JsonFileOutput(OutputHandler):
         return True
 
     def write(self, event: Dict[str, Any]) -> None:
-        if not self._check_disk():
-            return
         source = event.get("_source", "unknown")
         window = self._window_key(source)
         with self._lock:
+            if not self._check_disk():
+                return
             try:
                 handle = self._get_handle(source, window)
                 handle.write(json.dumps(event) + "\n")

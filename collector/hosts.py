@@ -1,7 +1,10 @@
+import logging
 from queue import Queue
 from typing import Any, Dict, Optional
 
 from collector.base import BaseCollector, enrich_event, should_skip_event
+
+logger = logging.getLogger("collector.hosts")
 
 _QUERY_PATH = "/devices/queries/devices/v1"
 _ENTITY_PATH = "/devices/entities/devices/GET/v2"

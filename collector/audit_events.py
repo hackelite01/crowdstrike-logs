@@ -1,7 +1,10 @@
+import logging
 from queue import Queue
 from typing import Any, Dict, Optional
 
 from collector.base import BaseCollector, enrich_event, should_skip_event
+
+logger = logging.getLogger("collector.audit_events")
 
 _QUERY_PATH = "/audit-events/queries/events/v1"
 _ENTITY_PATH = "/audit-events/entities/events/v1"
