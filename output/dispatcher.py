@@ -1,7 +1,7 @@
 import logging
 import threading
 from queue import Empty, Queue
-from typing import Any, Dict, List
+from typing import List
 
 from output.base import OutputHandler
 from utils.metrics import MetricsCollector
@@ -44,6 +44,8 @@ class OutputDispatcher(threading.Thread):
                 except Exception as exc:
                     logger.error("Output handler %s failed: %s", handler.name, exc)
                     self._metrics.increment(f"output_{handler.name}", "failed")
+
+            self._queue.task_done()
 
     def close_handlers(self) -> None:
         for handler in self._handlers:
