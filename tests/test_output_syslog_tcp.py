@@ -40,6 +40,6 @@ def test_reconnects_on_broken_pipe():
     mock_sock = MagicMock()
     mock_sock.sendall.side_effect = [BrokenPipeError, None]
     with patch("output.syslog_tcp.socket.socket", return_value=mock_sock):
-        out._sock = mock_sock
+        # Do NOT pre-set out._sock; let _connect() set it via the patched socket.socket
         out.write({"_source": "alerts", "id": "1", "_collected_at": "2026-01-01T00:00:00Z"})
     assert mock_sock.sendall.call_count == 2
