@@ -74,6 +74,18 @@ def test_handles_401_refreshes_token_and_retries():
     assert result == {"resources": ["x"]}
 
 
+def test_handles_double_401_raises():
+    """Second 401 after force_refresh should raise, not loop forever."""
+    client, auth, _ = _make_client()
+    unauthorized = _make_response(401, {})
+    unauthorized.raise_for_status = MagicMock()
+    unauthorized.raise_for_status.side_effect = Exception("HTTP 401")
+    with patch("collector.api_client.requests.request", return_value=unauthorized):
+        with pytest.raises(Exception):
+            client.get("/some/path")
+    auth.force_refresh.assert_called_once()
+
+
 def test_rate_limit_controller_wait_if_limited():
     rl = RateLimitController()
     rl.set_retry_after(time.time() + 2)

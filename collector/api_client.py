@@ -52,6 +52,7 @@ class ApiClient:
 
     def _request(self, method: str, path: str, **kwargs: Any) -> dict:
         url = f"{self._base_url}{path}"
+        _refreshed_for_401 = False
         for attempt in range(_MAX_RETRIES):
             self._rl.wait_if_limited()
             headers = {"Authorization": f"Bearer {self._auth.get_token()}"}
@@ -67,10 +68,12 @@ class ApiClient:
                 continue
 
             if resp.status_code == 401:
+                if _refreshed_for_401:
+                    resp.raise_for_status()  # second 401 after refresh — give up
                 logger.warning("401 Unauthorized — refreshing token and retrying")
                 self._auth.force_refresh()
-                headers["Authorization"] = f"Bearer {self._auth.get_token()}"
-                resp = requests.request(method, url, headers=headers, timeout=30, **kwargs)
+                _refreshed_for_401 = True
+                continue  # re-enter loop with fresh token
 
             if resp.status_code == 429:
                 retry_after = int(
