@@ -27,18 +27,22 @@ class SyslogTcpOutput(OutputHandler):
     def _connect(self) -> None:
         raw = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         raw.settimeout(10)
-        if self._tls_cfg.get("enabled"):
-            ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-            ca = self._tls_cfg.get("ca_cert")
-            if ca:
-                ctx.load_verify_locations(ca)
-            ctx.verify_mode = (
-                ssl.CERT_REQUIRED if self._tls_cfg.get("verify", True) else ssl.CERT_NONE
-            )
-            self._sock = ctx.wrap_socket(raw, server_hostname=self._host)
-        else:
-            self._sock = raw
-        self._sock.connect((self._host, self._port))
+        try:
+            if self._tls_cfg.get("enabled"):
+                ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+                ca = self._tls_cfg.get("ca_cert")
+                if ca:
+                    ctx.load_verify_locations(ca)
+                ctx.verify_mode = (
+                    ssl.CERT_REQUIRED if self._tls_cfg.get("verify", True) else ssl.CERT_NONE
+                )
+                self._sock = ctx.wrap_socket(raw, server_hostname=self._host)
+            else:
+                self._sock = raw
+            self._sock.connect((self._host, self._port))
+        except Exception:
+            raw.close()
+            raise
         logger.info("Syslog TCP connected to %s:%d", self._host, self._port)
 
     def _format_rfc5424(self, event: Dict[str, Any]) -> bytes:

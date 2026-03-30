@@ -56,7 +56,7 @@ class HttpPostOutput(OutputHandler):
             except Exception as exc:
                 if attempt == _MAX_RETRIES - 1:
                     logger.error("HTTP POST failed after %d attempts: %s", _MAX_RETRIES, exc)
-                    return
+                    raise RuntimeError(f"HTTP POST permanently failed after {_MAX_RETRIES} attempts: {exc}") from exc
                 sleep = _BASE_BACKOFF * (2 ** attempt)
                 logger.warning("HTTP POST error (attempt %d): %s — retrying in %ds", attempt + 1, exc, sleep)
                 time.sleep(sleep)
