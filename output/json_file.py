@@ -33,7 +33,7 @@ class JsonFileOutput(OutputHandler):
         return f"{source}_{now.strftime('%Y-%m-%d')}"
 
     def _get_handle(self, source: str, window: str) -> IO[str]:
-        key = f"{source}_{window}"
+        key = window  # window already contains source prefix from _window_key
         if key not in self._handles:
             filename = self._dir / f"{self._prefix}_{window}.json"
             self._handles[key] = open(filename, "a", encoding="utf-8")

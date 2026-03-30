@@ -25,7 +25,8 @@ class RateLimitController:
                 self._retry_after = epoch
 
     def wait_if_limited(self) -> None:
-        deadline = self._retry_after
+        with self._lock:
+            deadline = self._retry_after
         now = time.time()
         if now < deadline:
             wait = deadline - now + 0.5
