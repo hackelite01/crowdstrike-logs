@@ -8,7 +8,7 @@ def _make_collector(api_responses):
     api.get.side_effect = api_responses
     api.post.side_effect = lambda path, json=None: {
         "resources": [
-            {"composite_id": cid, "created_timestamp": "2026-01-01T00:01:00Z", "severity": 3}
+            {"id": cid, "composite_id": f"{cid}:xyz", "created_timestamp": "2026-01-01T00:01:00Z", "severity": 3}
             for cid in (json or {}).get("ids", [])
         ]
     }
@@ -43,7 +43,7 @@ def test_poll_skips_already_seen_event():
     api.get.return_value = query_resp
     api.post.return_value = {
         "resources": [
-            {"composite_id": "id-0", "created_timestamp": "2026-01-01T00:00:00Z"}
+            {"id": "id-0", "composite_id": "id-0:xyz", "created_timestamp": "2026-01-01T00:00:00Z"}
         ]
     }
     state = MagicMock()

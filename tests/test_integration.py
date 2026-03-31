@@ -64,6 +64,7 @@ def test_full_pipeline_writes_events_to_file(tmp_path, mock_api):
     log_dir = str(tmp_path / "logs")
 
     state = StateManager(state_path)
+    state.update_source("alerts", "2026-01-01T00:00:00Z", "")  # seed past timestamp
     queue: Queue = Queue(maxsize=1000)
     metrics = MetricsCollector()
 
@@ -87,14 +88,15 @@ def test_full_pipeline_writes_events_to_file(tmp_path, mock_api):
     # Run one poll cycle manually (don't start the thread loop)
     with patch("collector.api_client.requests.request") as mock_req:
         mock_req.side_effect = [
-            _make_resp({"resources": ["composite-id-001"], "meta": {"pagination": {}}}),
-            _make_resp({"resources": [{"composite_id": "composite-id-001",
-                                        "created_timestamp": "2026-03-30T12:00:00Z",
+            _make_resp({"resources": ["alert-id-001"], "meta": {"pagination": {}}}),
+            _make_resp({"resources": [{"id": "alert-id-001",
+                                        "composite_id": "alert-id-001:xyz",
+                                        "created_timestamp": "2099-01-01T00:00:00Z",
                                         "severity": 3}]}),
         ]
         collector._poll()
 
-    time.sleep(0.2)
+    queue.join()  # wait for dispatcher to process all enqueued events
     dispatcher.stop()
     handler.close()
 
@@ -105,8 +107,8 @@ def test_full_pipeline_writes_events_to_file(tmp_path, mock_api):
     event = json.loads(lines[0])
     assert event["_source"] == "alerts"
     assert event["_tag"] == "integration-test"
-    assert event["_event_id"] == "composite-id-001"
-    assert event["composite_id"] == "composite-id-001"
+    assert event["_event_id"] == "alert-id-001"
+    assert event["id"] == "alert-id-001"
 
 
 def _make_resp(body: dict) -> MagicMock:

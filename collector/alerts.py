@@ -7,8 +7,8 @@ from collector.base import BaseCollector, enrich_event, should_skip_event
 logger = logging.getLogger("collector.alerts")
 
 _QUERY_PATH = "/alerts/queries/alerts/v2"
-_ENTITY_PATH = "/alerts/entities/alerts/GET/v2"
-_EVENT_ID_FIELD = "composite_id"
+_ENTITY_PATH = "/alerts/entities/alerts/v2"
+_EVENT_ID_FIELD = "id"
 _TS_FIELD = "created_timestamp"
 
 
@@ -76,4 +76,5 @@ class AlertsCollector(BaseCollector):
             if not after:
                 break
 
+        logger.info("Poll complete: last_ts=%s ids_found=%s", new_last_ts, (new_last_ts != last_ts or new_last_id != last_id))
         self._save_state(new_last_ts, new_last_id)
