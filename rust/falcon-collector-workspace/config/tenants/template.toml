@@ -1,0 +1,5 @@
+# Copy and rename this file to add a new tenant.
+name       = "TENANT_NAME"
+base_url   = "https://api.us-2.crowdstrike.com"
+env_prefix = "TENANT_PREFIX"
+enabled    = true

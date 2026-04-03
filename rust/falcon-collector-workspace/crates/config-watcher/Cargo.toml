@@ -1,0 +1,19 @@
+﻿[package]
+name    = "config-watcher"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tokio          = { workspace = true }
+serde          = { workspace = true }
+thiserror      = { workspace = true }
+tracing        = { workspace = true }
+notify         = { workspace = true }
+dotenvy        = { workspace = true }
+toml           = { workspace = true }
+chrono         = { workspace = true }
+anyhow         = { workspace = true }
+collector-core = { path = "../collector-core" }
+
+[dev-dependencies]
+tempfile = "3"

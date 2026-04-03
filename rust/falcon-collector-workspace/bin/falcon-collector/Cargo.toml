@@ -1,0 +1,16 @@
+[package]
+name    = "falcon-collector"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "falcon-collector"
+path = "src/main.rs"
+
+[dependencies]
+tokio              = { workspace = true }
+tracing            = { workspace = true }
+tracing-subscriber = { workspace = true }
+anyhow             = { workspace = true }
+multi-tenant       = { path = "../../crates/multi-tenant" }
+config-watcher     = { path = "../../crates/config-watcher" }

@@ -1,0 +1,27 @@
+﻿[[tenants]]
+name       = "FCT"
+base_url   = "https://api.us-2.crowdstrike.com"
+env_prefix = "FCT"
+enabled    = true
+
+# Add more tenants below -- NO secrets here
+# [[tenants]]
+# name       = "clientB"
+# base_url   = "https://api.us-1.crowdstrike.com"
+# env_prefix = "CLIENTB"
+# enabled    = true
+
+[collection]
+poll_interval_seconds = 30
+batch_size            = 100
+dedup_window_minutes  = 5
+dedup_window_size     = 500
+
+[supervisor]
+max_restarts                 = 10
+restart_backoff_base_seconds = 10
+restart_backoff_max_seconds  = 120
+
+[outputs.json_file]
+enabled   = true
+directory = 'C:\Users\FCT\Downloads\Mayank nu KaamKaaj\crowdstrike-logs\logs'

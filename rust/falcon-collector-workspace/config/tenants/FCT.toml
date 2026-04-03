@@ -1,0 +1,6 @@
+# Per-tenant overrides for FCT (optional)
+# These values merge with / override default.toml for this tenant.
+name       = "FCT"
+base_url   = "https://api.us-2.crowdstrike.com"
+env_prefix = "FCT"
+enabled    = true

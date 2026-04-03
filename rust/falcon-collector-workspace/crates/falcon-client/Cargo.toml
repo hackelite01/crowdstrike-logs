@@ -1,0 +1,16 @@
+﻿[package]
+name    = "falcon-client"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tokio          = { workspace = true }
+serde          = { workspace = true }
+serde_json     = { workspace = true }
+thiserror      = { workspace = true }
+tracing        = { workspace = true }
+reqwest        = { workspace = true }
+chrono         = { workspace = true }
+anyhow         = { workspace = true }
+async-trait    = { workspace = true }
+collector-core = { path = "../collector-core" }

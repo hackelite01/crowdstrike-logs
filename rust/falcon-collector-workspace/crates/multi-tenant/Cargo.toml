@@ -1,0 +1,18 @@
+[package]
+name    = "multi-tenant"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tokio           = { workspace = true }
+serde           = { workspace = true }
+thiserror       = { workspace = true }
+tracing         = { workspace = true }
+dashmap         = { workspace = true }
+anyhow          = { workspace = true }
+tokio-util      = { workspace = true }
+collector-core  = { path = "../collector-core" }
+config-watcher  = { path = "../config-watcher" }
+falcon-client   = { path = "../falcon-client" }
+pipeline        = { path = "../pipeline" }
+storage         = { path = "../storage" }
