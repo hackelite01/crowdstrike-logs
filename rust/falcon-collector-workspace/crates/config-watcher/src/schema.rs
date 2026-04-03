@@ -33,10 +33,20 @@ pub struct CollectionConfig {
     pub poll_interval_seconds: u64,
     #[serde(default = "default_batch")]
     pub batch_size: u32,
+    /// Duration of the dedup window in minutes.
+    /// IDs seen within this window are suppressed; entries older than this
+    /// are evicted from both the in-memory cache and the persistent state file.
     #[serde(default = "default_dedup_minutes")]
     pub dedup_window_minutes: u64,
-    #[serde(default = "default_dedup_size")]
-    pub dedup_window_size: usize,
+    /// Maximum in-memory dedup cache size per tenant (LRU eviction when full).
+    /// Should be set high enough that the window never silently evicts live IDs.
+    /// Default 100_000 handles ~100 alerts/s for a 5-minute window comfortably.
+    #[serde(default = "default_dedup_lru_size")]
+    pub dedup_lru_size: usize,
+    /// Directory where per-tenant persistent dedup state files are stored.
+    /// Files are named `dedup_<tenant>.json` and written atomically.
+    #[serde(default = "default_dedup_state_dir")]
+    pub dedup_state_dir: String,
 }
 
 impl Default for CollectionConfig {
@@ -45,7 +55,8 @@ impl Default for CollectionConfig {
             poll_interval_seconds: default_poll_secs(),
             batch_size: default_batch(),
             dedup_window_minutes: default_dedup_minutes(),
-            dedup_window_size: default_dedup_size(),
+            dedup_lru_size: default_dedup_lru_size(),
+            dedup_state_dir: default_dedup_state_dir(),
         }
     }
 }
@@ -90,12 +101,13 @@ impl Default for JsonFileConfig {
     }
 }
 
-fn default_true()          -> bool   { true }
-fn default_poll_secs()     -> u64    { 30 }
-fn default_batch()         -> u32    { 100 }
-fn default_dedup_minutes() -> u64    { 5 }
-fn default_dedup_size()    -> usize  { 500 }
-fn default_log_dir()       -> String { "logs".to_string() }
-fn default_max_restarts()  -> u32    { 10 }
-fn default_backoff_base()  -> u64    { 10 }
-fn default_backoff_max()   -> u64    { 120 }
+fn default_true()           -> bool   { true }
+fn default_poll_secs()      -> u64    { 30 }
+fn default_batch()          -> u32    { 100 }
+fn default_dedup_minutes()  -> u64    { 5 }
+fn default_dedup_lru_size() -> usize  { 100_000 }
+fn default_dedup_state_dir() -> String { "state".to_string() }
+fn default_log_dir()        -> String { "logs".to_string() }
+fn default_max_restarts()   -> u32    { 10 }
+fn default_backoff_base()   -> u64    { 10 }
+fn default_backoff_max()    -> u64    { 120 }

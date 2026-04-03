@@ -14,8 +14,12 @@ enabled    = true
 [collection]
 poll_interval_seconds = 30
 batch_size            = 100
+# Dedup window: IDs seen within this window are suppressed (minutes)
 dedup_window_minutes  = 5
-dedup_window_size     = 500
+# In-memory LRU cache size per tenant. 100_000 covers ~100 alerts/s for 5 min.
+dedup_lru_size        = 100000
+# Directory for persistent per-tenant dedup state files (dedup_<tenant>.json)
+dedup_state_dir       = "state"
 
 [supervisor]
 max_restarts                 = 10
@@ -24,4 +28,4 @@ restart_backoff_max_seconds  = 120
 
 [outputs.json_file]
 enabled   = true
-directory = 'C:\Users\FCT\Downloads\Mayank nu KaamKaaj\crowdstrike-logs\logs'
+directory = "logs"

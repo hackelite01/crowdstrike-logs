@@ -11,6 +11,7 @@ tracing         = { workspace = true }
 dashmap         = { workspace = true }
 anyhow          = { workspace = true }
 tokio-util      = { workspace = true }
+chrono          = { workspace = true }
 collector-core  = { path = "../collector-core" }
 config-watcher  = { path = "../config-watcher" }
 falcon-client   = { path = "../falcon-client" }

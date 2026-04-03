@@ -7,26 +7,104 @@ use collector_core::{CollectedEvent, Collector, CollectorError, EventSource};
 use crate::auth::AuthManager;
 
 pub struct AlertsCollector {
-    tenant: String,
-    auth: Arc<AuthManager>,
-    http: reqwest::Client,
-    base_url: String,
+    pub tenant: String,
+    auth:       Arc<AuthManager>,
+    http:       reqwest::Client,
+    base_url:   String,
     batch_size: u32,
 }
 
 impl AlertsCollector {
     pub fn new(
-        tenant: String,
-        auth: Arc<AuthManager>,
-        http: reqwest::Client,
-        base_url: String,
+        tenant:     String,
+        auth:       Arc<AuthManager>,
+        http:       reqwest::Client,
+        base_url:   String,
         batch_size: u32,
     ) -> Self {
         Self { tenant, auth, http, base_url, batch_size }
     }
 
-    /// Step 1: query alert IDs, returns (ids, next_after_cursor)
-    async fn query_ids(
+    // ── Public API ────────────────────────────────────────────────────────────
+
+    /// Query the CrowdStrike alert ID list.
+    /// Returns `(composite_ids, optional_next_after_cursor)`.
+    /// Handles OAuth token acquisition and 401-retry internally.
+    pub async fn query_ids(
+        &self,
+        since: Option<DateTime<Utc>>,
+        after: Option<&str>,
+    ) -> Result<(Vec<String>, Option<String>), CollectorError> {
+        let mut retried = false;
+        loop {
+            let token = self.auth.bearer_token().await?;
+            match self.query_ids_inner(&token, since, after).await {
+                Err(CollectorError::Auth { .. }) if !retried => {
+                    self.auth.invalidate().await;
+                    retried = true;
+                }
+                other => return other,
+            }
+        }
+    }
+
+    /// Fetch full alert entity objects for a batch of composite IDs.
+    /// Handles OAuth token acquisition and 401-retry internally.
+    pub async fn fetch_entities(
+        &self,
+        ids: &[String],
+    ) -> Result<Vec<serde_json::Value>, CollectorError> {
+        if ids.is_empty() { return Ok(vec![]); }
+        let mut retried = false;
+        loop {
+            let token = self.auth.bearer_token().await?;
+            match self.fetch_entities_inner(&token, ids).await {
+                Err(CollectorError::Auth { .. }) if !retried => {
+                    self.auth.invalidate().await;
+                    retried = true;
+                }
+                other => return other,
+            }
+        }
+    }
+
+    /// Extract the canonical unique ID from an alert entity.
+    /// Prefers `composite_id` because that is what the query API returns,
+    /// ensuring the dedup cache keys are consistent between query and entity layers.
+    pub fn extract_id(entity: &serde_json::Value) -> &str {
+        entity.get("composite_id")
+            .or_else(|| entity.get("id"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("unknown")
+    }
+
+    /// Convert raw entity JSON values to `CollectedEvent`s.
+    /// ID extraction uses `composite_id` first (see `extract_id`).
+    pub fn entities_to_events(
+        &self,
+        entities: Vec<serde_json::Value>,
+        fallback_ts: DateTime<Utc>,
+    ) -> Vec<CollectedEvent> {
+        entities.into_iter().map(|entity| {
+            let id = Self::extract_id(&entity).to_string();
+            let timestamp = entity.get("created_timestamp")
+                .and_then(|v| v.as_str())
+                .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
+                .map(|dt| dt.with_timezone(&Utc))
+                .unwrap_or(fallback_ts);
+            CollectedEvent {
+                tenant:    self.tenant.clone(),
+                source:    EventSource::Alert,
+                timestamp,
+                id,
+                payload:   entity,
+            }
+        }).collect()
+    }
+
+    // ── Private helpers ───────────────────────────────────────────────────────
+
+    async fn query_ids_inner(
         &self,
         token: &str,
         since: Option<DateTime<Utc>>,
@@ -38,12 +116,12 @@ impl AlertsCollector {
             .map(|ts| format!("created_timestamp:>='{}'", ts.to_rfc3339()))
             .unwrap_or_default();
 
-        let mut query = vec![
+        let mut query: Vec<(&str, String)> = vec![
             ("sort",  "created_timestamp.asc".to_string()),
             ("limit", self.batch_size.to_string()),
         ];
         if !filter.is_empty() { query.push(("filter", filter)); }
-        if let Some(a) = after   { query.push(("after",  a.to_string())); }
+        if let Some(a) = after  { query.push(("after",  a.to_string())); }
 
         let resp = self.http
             .get(&url)
@@ -55,7 +133,6 @@ impl AlertsCollector {
 
         self.check_status(&resp)?;
 
-        // Deserialise as Value -- tolerant of any field type changes
         let body: serde_json::Value = resp.json().await
             .map_err(|e| CollectorError::Http(e.to_string()))?;
 
@@ -71,19 +148,16 @@ impl AlertsCollector {
             .as_str()
             .map(|s| s.to_string());
 
-        debug!(tenant = %self.tenant, ids = ids.len(), "Query returned IDs");
+        debug!(tenant = %self.tenant, ids = ids.len(), ?next_after, "Query returned IDs");
         Ok((ids, next_after))
     }
 
-    /// Step 2: fetch full alert entities for a batch of IDs
-    async fn fetch_entities(
+    async fn fetch_entities_inner(
         &self,
         token: &str,
         ids: &[String],
     ) -> Result<Vec<serde_json::Value>, CollectorError> {
-        if ids.is_empty() { return Ok(vec![]); }
-
-        let url = format!("{}/alerts/entities/alerts/v2", self.base_url);
+        let url  = format!("{}/alerts/entities/alerts/v2", self.base_url);
         let body = serde_json::json!({ "composite_ids": ids });
 
         let resp = self.http
@@ -104,30 +178,28 @@ impl AlertsCollector {
             .cloned()
             .unwrap_or_default();
 
-        debug!(tenant = %self.tenant, entities = entities.len(), "Fetched entities");
+        debug!(tenant = %self.tenant, count = entities.len(), "Fetched entities");
         Ok(entities)
     }
 
     fn check_status(&self, resp: &reqwest::Response) -> Result<(), CollectorError> {
         match resp.status() {
-            s if s == reqwest::StatusCode::UNAUTHORIZED => {
-                Err(CollectorError::Auth {
-                    tenant: self.tenant.clone(),
-                    reason: "401 Unauthorized".to_string(),
-                })
-            }
+            s if s == reqwest::StatusCode::UNAUTHORIZED => Err(CollectorError::Auth {
+                tenant: self.tenant.clone(),
+                reason: "401 Unauthorized".to_string(),
+            }),
             s if s == reqwest::StatusCode::TOO_MANY_REQUESTS => {
                 warn!(tenant = %self.tenant, "Rate limited");
                 Err(CollectorError::RateLimited)
             }
-            s if !s.is_success() => {
-                Err(CollectorError::Http(format!("HTTP {s}")))
-            }
+            s if !s.is_success() => Err(CollectorError::Http(format!("HTTP {s}"))),
             _ => Ok(()),
         }
     }
 }
 
+/// Keep the `Collector` trait impl for compatibility with any future consumers
+/// that don't need the pre-filter path.
 #[async_trait]
 impl Collector for AlertsCollector {
     fn name(&self) -> &str { "alerts" }
@@ -136,48 +208,16 @@ impl Collector for AlertsCollector {
         &mut self,
         since: Option<DateTime<Utc>>,
     ) -> Result<Vec<CollectedEvent>, CollectorError> {
-        let token = self.auth.bearer_token().await?;
+        let now = Utc::now();
         let mut all_events: Vec<CollectedEvent> = Vec::new();
         let mut after: Option<String> = None;
-        let now = Utc::now();
 
         loop {
-            // On 401: invalidate token cache and get a fresh token, then retry once
-            let (ids, next_after) = match self.query_ids(&token, since, after.as_deref()).await {
-                Err(CollectorError::Auth { .. }) => {
-                    self.auth.invalidate().await;
-                    let fresh = self.auth.bearer_token().await?;
-                    self.query_ids(&fresh, since, after.as_deref()).await?
-                }
-                other => other?,
-            };
-
+            let (ids, next_after) = self.query_ids(since, after.as_deref()).await?;
             if !ids.is_empty() {
-                let entities = self.fetch_entities(&token, &ids).await?;
-
-                for entity in entities {
-                    let id = entity.get("id")
-                        .or_else(|| entity.get("composite_id"))
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("unknown")
-                        .to_string();
-
-                    let timestamp = entity.get("created_timestamp")
-                        .and_then(|v| v.as_str())
-                        .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
-                        .map(|dt| dt.with_timezone(&Utc))
-                        .unwrap_or(now);
-
-                    all_events.push(CollectedEvent {
-                        tenant: self.tenant.clone(),
-                        source: EventSource::Alert,
-                        timestamp,
-                        id,
-                        payload: entity,
-                    });
-                }
+                let entities = self.fetch_entities(&ids).await?;
+                all_events.extend(self.entities_to_events(entities, now));
             }
-
             after = next_after;
             if after.is_none() { break; }
         }
